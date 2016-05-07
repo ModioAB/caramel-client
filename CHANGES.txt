@@ -1,4 +1,9 @@
-0.0
+1.0
 ---
 
--  Initial version
+- Split client and server
+
+0.1
+---
+
+- Original client in original repo
