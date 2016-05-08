@@ -152,7 +152,7 @@ class CertificateRequest(object):
             if result != 0:
                 logging.error('Failed to generate private key!')
                 raise CertificateRequestException()
-            os.chmod(self.key_file_name, 0600)
+            os.chmod(self.key_file_name, 0o600)
 
     def ensure_valid_csr_file(self, subject):
         have_csr = False
