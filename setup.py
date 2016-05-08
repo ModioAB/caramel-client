@@ -24,4 +24,5 @@ setup(
     keywords="caramel ssl tls certificates x509 ca cert",
     include_package_data=True,
     zip_safe=True,
+    install_requires=['requests'],
 )
