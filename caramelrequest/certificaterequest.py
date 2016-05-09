@@ -72,6 +72,7 @@ class CertificateRequest(object):
 
     def perform(self):
         self.assert_openssl_available()
+        self.ensure_ca_cert_available()
         self.assert_ca_cert_available()
         self.assert_ca_cert_verifies()
         subject = self.get_subject()
@@ -92,6 +93,23 @@ class CertificateRequest(object):
             logging.info('CA certificate file {} does not exist!'
                          .format(self.ca_cert_file_name))
             raise CertificateRequestException()
+
+    def ensure_ca_cert_available(self):
+        url = 'https://{}/root.crt'.format(self.server)
+        if not os.path.isfile(self.ca_cert_file_name):
+            logging.info('Attempting to fetch CA cert')
+            session = requests.Session()
+            session.verify = True
+            try:
+                res = session.get(url)
+                res.raise_for_status()
+            except requests.exceptions.SSLError:
+                logging.error("Custom CA server or other SSL error. Aborting")
+            except:
+                logging.error("Could not download CA file.")
+            else:
+                with open(self.ca_cert_file_name, 'wb') as f:
+                    f.write(res.content)
 
     def assert_ca_cert_verifies(self):
         result = call_silent('openssl', 'verify',
@@ -195,7 +213,7 @@ class CertificateRequest(object):
         url = 'https://{}/{}'.format(self.server, csr_hash)
 
         session = requests.Session()
-        session.verify = self.ca_cert_file_name
+        session.verify = self.get_ssl_verify_argument()
 
         response = session.get(url)
         while True:
@@ -220,6 +238,34 @@ class CertificateRequest(object):
                               .format(parse(response)))
                 response.raise_for_status()
                 break
+
+    def get_ssl_verify_argument(self):
+        if self.is_selfsigned_server():
+            return self.ca_cert_file_name
+        elif self.is_public_ssl_server():
+            return True
+        else:
+            raise CertificateRequestException()
+
+    def is_selfsigned_server(self):
+        url = 'https://{}/'.format(self.server)
+        session = requests.Session()
+        session.verify = self.ca_cert_file_name
+        try:
+            session.get(url)
+        except requests.exceptions.SSLError:
+            return False
+        return True
+
+    def is_public_ssl_server(self):
+        url = 'https://{}/'.format(self.server)
+        session = requests.Session()
+        session.verify = True
+        try:
+            session.get(url)
+        except requests.exceptions.SSLError:
+            return False
+        return True
 
     def get_csr_and_hash(self):
         with open(self.csr_file_name, 'rb') as f:
