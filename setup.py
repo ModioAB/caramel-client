@@ -8,7 +8,7 @@ It's using the `openssl` command line client in order to reduce the amount of
 dependencies.
 
 """
-version = "1.2.1"
+version = "1.2.2"
 
 setup(
     name="caramel-client",
