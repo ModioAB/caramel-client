@@ -1,28 +1,22 @@
-import os
-
 from setuptools import setup, find_packages
 
-here = os.path.abspath(os.path.dirname(__file__))
-
-README = open(os.path.join(here, "README.md")).read()
-CHANGES = open(os.path.join(here, "CHANGES.txt")).read()
-
-version = "1.2.0"
-
-setup(
-    name="caramel-client",
-    version=version,
-    description="""caramel-client: A python client for the Caramel CA system.
+description = """ caramel-client: A python client for the Caramel CA system.
 This is our command line client for Caramel. It generates keys, requests and
 updates the certificates.
 
 It's using the `openssl` command line client in order to reduce the amount of
 dependencies.
 
-""",
+"""
+version = "1.2.1"
+
+setup(
+    name="caramel-client",
+    version=version,
+    description=description,
     packages=find_packages(),
     scripts=['caramel-client'],
-    long_description=README + "\n\n" + CHANGES,
+    long_description=description,
     classifiers=[
         "Programming Language :: Python",
     ],
