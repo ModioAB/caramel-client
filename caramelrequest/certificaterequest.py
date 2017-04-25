@@ -141,7 +141,19 @@ class CertificateRequest(object):
                                      '-subject',
                                      '-noout',
                                      '-in', self.ca_cert_file_name)
-        _, value = decode_openssl_utf8(output).strip().split('subject= ', 1)
+        state = decode_openssl_utf8(output).strip()
+# The below ugly thing is for OpenSSL 1.1, as it is no longer outputting a
+# format useful as -subject when you parse the subject
+# FIXME: EX-TER-MI-NATE
+        state = state.replace("C = ", "/C=")
+        state = state.replace(", OU = ", "/OU=")
+        state = state.replace(", L = ", "/L=")
+        state = state.replace(", O = ", "/O=")
+        state = state.replace(", ST = ", "/ST=")
+        state = state.replace(", CN = ", "/CN=")
+        state = state.strip()
+        _, value = state.split('subject=', 1)
+        value = value.strip()
         prefix, original_cn = value.split('/CN=')
         if prefix == '/C=SE/OU=Caramel/L=Linköping/O=Modio AB/ST=Östergötland':
             prefix = '/C=SE/ST=Östergötland/L=Linköping/O=Modio AB/OU=Caramel'
@@ -291,7 +303,22 @@ def parse_html(response):
 
 
 def decode_openssl_utf8(text):
-    return bytes(ord(x) for x in text.decode('unicode_escape')) \
+    # Because OpenSSL 1.1 changed how it escapes characters.
+    if b'\\\\' in text:
+        raise ValueError("There are double encoded backslashes in the subject."
+                         " due to openssl 1.1 we do not know how to parse"
+                         " this")
+# OpenSSL 1.1 changed the quoting output of UTF-8. This causes headache.
+# It went from "ST=\xC3\x96sterg\xC3\xB6tland/"
+# To: ST = \C3\96sterg\C3\B6tland,
+    hacktext = text
+    if b'\\x' not in text:
+        hacktext = text.replace(b'\\', b'\\x')
+
+    if hacktext != text:
+        logging.warning("OpenSSL 1.1 weird unicode hack in place.")
+
+    return bytes(ord(x) for x in hacktext.decode('unicode_escape')) \
         .decode('utf-8')
 
 
