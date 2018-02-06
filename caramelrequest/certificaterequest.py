@@ -157,7 +157,7 @@ class CertificateRequest(object):
         prefix, original_cn = value.split('/CN=')
         if prefix == '/C=SE/OU=Caramel/L=Linköping/O=Modio AB/ST=Östergötland':
             prefix = '/C=SE/ST=Östergötland/L=Linköping/O=Modio AB/OU=Caramel'
-        return '{}/CN={}'.format(prefix, self.client_id)
+        return '/CN={cn}/{prefix}'.format(prefix=prefix, cn=self.client_id)
 
     def ensure_valid_key_file(self):
         have_key = False
