@@ -12,5 +12,5 @@ RUN microdnf install python3-pip openssl && \
 
 VOLUME ["/data"]
 WORKDIR /data
-ENTRYPOINT ["/usr/bin/caramel-client"]
+ENTRYPOINT ["caramel-client"]
 CMD []
