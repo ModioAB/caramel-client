@@ -57,7 +57,8 @@ unstructuredName        = An optional company name
 
 
 class CertificateRequestException(Exception):
-    pass
+    def __init__(self, fmt, *args):
+        super().__init__(fmt % args)
 
 
 class CertificateRequest(object):
@@ -103,10 +104,15 @@ class CertificateRequest(object):
             try:
                 res = session.get(url)
                 res.raise_for_status()
-            except requests.exceptions.SSLError:
-                logging.error("Custom CA server or other SSL error. Aborting")
-            except:
-                logging.error("Could not download CA file.")
+            except requests.exceptions.SSLError as exc:
+                raise CertificateRequestException(
+                    "Custom CA server or other SSL error: %s",
+                    exc
+                )
+            except Exception:
+                raise CertificateRequestException(
+                    "Could not download CA file!"
+                )
             else:
                 with open(self.ca_cert_file_name, 'wb') as f:
                     f.write(res.content)
@@ -116,18 +122,19 @@ class CertificateRequest(object):
                              '-CAfile', self.ca_cert_file_name,
                              self.ca_cert_file_name)
         if 0 != result:
-            logging.error('CA cert {} is not valid; bailing'
-                          .format(self.ca_cert_file_name))
-            raise CertificateRequestException()
+            raise CertificateRequestException(
+                'CA cert %s is not valid; bailing', self.ca_cert_file_name
+            )
 
     def assert_temp_cert_verifies(self):
         result = call_silent('openssl', 'verify',
                              '-CAfile', self.ca_cert_file_name,
                              self.crt_temp_file_name)
         if 0 != result:
-            logging.error('Our new cert {} is not valid; bailing'
-                          .format(self.crt_temp_file_name))
-            raise CertificateRequestException()
+            raise CertificateRequestException(
+                'Our new cert %s is not valid; bailing',
+                self.crt_temp_file_name
+            )
 
     def rename_temp_cert(self):
         logging.info('Recieved certificate valid; moving it to {}'
@@ -180,8 +187,9 @@ class CertificateRequest(object):
                                  '-out', self.key_file_name,
                                  '2048')
             if result != 0:
-                logging.error('Failed to generate private key!')
-                raise CertificateRequestException()
+                raise CertificateRequestException(
+                    'Failed to generate private key!'
+                )
             os.chmod(self.key_file_name, 0o600)
 
     def ensure_valid_csr_file(self, subject):
@@ -217,8 +225,9 @@ class CertificateRequest(object):
                                      '-out', self.csr_file_name,
                                      '-subj', subject)
             if result != 0:
-                logging.error('Failed to create certificate signing request!')
-                raise CertificateRequestException()
+                raise CertificateRequestException(
+                    'Failed to create certificate signing request!'
+                )
 
     def request_cert_from_server(self):
         csr, csr_hash = self.get_csr_and_hash()
@@ -257,8 +266,9 @@ class CertificateRequest(object):
         try:
             self.verify_public_ssl_server()
         except requests.exceptions.SSLError as exc:
-            logging.error('Problem connecting to CA server: %s', exc)
-            raise CertificateRequestException() from exc
+            raise CertificateRequestException(
+                'Problem connecting to CA server: %s', exc
+            ) from exc
         else:
             return True
 
@@ -345,7 +355,8 @@ def main():
 
     try:
         CertificateRequest(server=server, client_id=client_id).perform()
-    except CertificateRequestException:
+    except CertificateRequestException as exc:
+        logging.error("%s", exc)
         sys.exit(1)
 
 
