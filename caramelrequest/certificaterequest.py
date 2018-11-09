@@ -57,7 +57,8 @@ unstructuredName        = An optional company name
 
 
 class CertificateRequestException(Exception):
-    pass
+    def __init__(self, fmt, *args):
+        super().__init__(fmt % args)
 
 
 class CertificateRequest(object):
@@ -85,14 +86,16 @@ class CertificateRequest(object):
     def assert_openssl_available(self):
         path = distutils.spawn.find_executable('openssl')
         if path is None:
-            logging.error('Cannot find an openssl executable!')
-            raise CertificateRequestException()
+            raise CertificateRequestException(
+                'Cannot find an openssl executable!'
+            )
 
     def assert_ca_cert_available(self):
         if not os.path.isfile(self.ca_cert_file_name):
-            logging.info('CA certificate file {} does not exist!'
-                         .format(self.ca_cert_file_name))
-            raise CertificateRequestException()
+            raise CertificateRequestException(
+                'CA certificate file %s does not exist!',
+                self.ca_cert_file_name
+            )
 
     def ensure_ca_cert_available(self):
         url = 'https://{}/root.crt'.format(self.server)
@@ -103,10 +106,15 @@ class CertificateRequest(object):
             try:
                 res = session.get(url)
                 res.raise_for_status()
-            except requests.exceptions.SSLError:
-                logging.error("Custom CA server or other SSL error. Aborting")
-            except:
-                logging.error("Could not download CA file.")
+            except requests.exceptions.SSLError as exc:
+                raise CertificateRequestException(
+                    "Custom CA server or other SSL error: %s",
+                    exc
+                )
+            except Exception:
+                raise CertificateRequestException(
+                    "Could not download CA file!"
+                )
             else:
                 with open(self.ca_cert_file_name, 'wb') as f:
                     f.write(res.content)
@@ -116,22 +124,25 @@ class CertificateRequest(object):
                              '-CAfile', self.ca_cert_file_name,
                              self.ca_cert_file_name)
         if 0 != result:
-            logging.error('CA cert {} is not valid; bailing'
-                          .format(self.ca_cert_file_name))
-            raise CertificateRequestException()
+            raise CertificateRequestException(
+                'CA cert %s is not valid; bailing', self.ca_cert_file_name
+            )
 
     def assert_temp_cert_verifies(self):
         result = call_silent('openssl', 'verify',
                              '-CAfile', self.ca_cert_file_name,
                              self.crt_temp_file_name)
         if 0 != result:
-            logging.error('Our new cert {} is not valid; bailing'
-                          .format(self.crt_temp_file_name))
-            raise CertificateRequestException()
+            raise CertificateRequestException(
+                'Our new cert %s is not valid; bailing',
+                self.crt_temp_file_name
+            )
 
     def rename_temp_cert(self):
-        logging.info('Recieved certificate valid; moving it to {}'
-                     .format(self.crt_file_name))
+        logging.info(
+            'Recieved certificate valid; moving it to %s',
+            self.crt_file_name
+        )
         os.rename(self.crt_temp_file_name,
                   self.crt_file_name)
 
@@ -162,17 +173,23 @@ class CertificateRequest(object):
     def ensure_valid_key_file(self):
         have_key = False
         if not os.path.isfile(self.key_file_name):
-            logging.info('Key file {} does not exist; generating it'
-                         .format(self.key_file_name))
+            logging.info(
+                'Key file %s does not exist; generating it',
+                self.key_file_name
+            )
         elif 0 != call_silent('openssl',
                               'pkey',
                               '-noout',
                               '-in', self.key_file_name):
-            logging.info('Key file {} is not valid; regenerating it'
-                         .format(self.key_file_name))
+            logging.info(
+                'Key file %s is not valid; regenerating it',
+                self.key_file_name
+            )
         else:
-            logging.info('Key file {} is valid; using it'
-                         .format(self.key_file_name))
+            logging.info(
+                'Key file %s is valid; using it',
+                self.key_file_name
+            )
             have_key = True
         if not have_key:
             result = call_silent('openssl',
@@ -180,28 +197,35 @@ class CertificateRequest(object):
                                  '-out', self.key_file_name,
                                  '2048')
             if result != 0:
-                logging.error('Failed to generate private key!')
-                raise CertificateRequestException()
+                raise CertificateRequestException(
+                    'Failed to generate private key!'
+                )
             os.chmod(self.key_file_name, 0o600)
 
     def ensure_valid_csr_file(self, subject):
         have_csr = False
         if not os.path.isfile(self.csr_file_name):
-            logging.info(('Certificate signing request file {} ' +
-                          'does not exist; generating it')
-                         .format(self.csr_file_name))
+            logging.info(
+                'Certificate signing request file %s does not exist; '
+                'generating it',
+                self.csr_file_name
+            )
         elif 0 != call_silent('openssl',
                               'req',
                               '-noout',
                               '-verify',
                               '-in', self.csr_file_name,
                               '-key', self.key_file_name):
-            logging.info(('Certificate signing request file {} ' +
-                          'is not valid; regenerating it')
-                         .format(self.csr_file_name))
+            logging.info(
+                'Certificate signing request file %s is not valid; '
+                'regenerating it',
+                self.csr_file_name
+            )
         else:
-            logging.info(('Certificate signing request file {} is valid; ' +
-                          'using it').format(self.csr_file_name))
+            logging.info(
+                'Certificate signing request file %s is valid; using it',
+                self.csr_file_name
+            )
             have_csr = True
         if not have_csr:
             with tempfile.NamedTemporaryFile() as cnf:
@@ -217,8 +241,9 @@ class CertificateRequest(object):
                                      '-out', self.csr_file_name,
                                      '-subj', subject)
             if result != 0:
-                logging.error('Failed to create certificate signing request!')
-                raise CertificateRequestException()
+                raise CertificateRequestException(
+                    'Failed to create certificate signing request!'
+                )
 
     def request_cert_from_server(self):
         csr, csr_hash = self.get_csr_and_hash()
@@ -240,24 +265,29 @@ class CertificateRequest(object):
                     break
                 response = session.get(url)
             elif response.status_code == 200:
-                logging.info('Recieved certificate; saving it to {}'
-                             .format(self.crt_temp_file_name))
+                logging.info(
+                    'Recieved certificate; saving it to %s',
+                    self.crt_temp_file_name
+                )
                 with open(self.crt_temp_file_name, 'wb') as f:
                     f.write(response.content)
                 break
             else:
-                logging.error('Request failed: {}'
-                              .format(parse(response)))
+                logging.error('Request failed: %s', parse(response))
                 response.raise_for_status()
                 break
 
     def get_ssl_verify_argument(self):
         if self.is_selfsigned_server():
             return self.ca_cert_file_name
-        elif self.is_public_ssl_server():
-            return True
+        try:
+            self.verify_public_ssl_server()
+        except requests.exceptions.SSLError as exc:
+            raise CertificateRequestException(
+                'Problem connecting to CA server: %s', exc
+            ) from exc
         else:
-            raise CertificateRequestException()
+            return True
 
     def is_selfsigned_server(self):
         url = 'https://{}/'.format(self.server)
@@ -269,15 +299,11 @@ class CertificateRequest(object):
             return False
         return True
 
-    def is_public_ssl_server(self):
+    def verify_public_ssl_server(self):
         url = 'https://{}/'.format(self.server)
         session = requests.Session()
         session.verify = True
-        try:
-            session.get(url)
-        except requests.exceptions.SSLError:
-            return False
-        return True
+        session.get(url)
 
     def get_csr_and_hash(self):
         with open(self.csr_file_name, 'rb') as f:
@@ -346,7 +372,8 @@ def main():
 
     try:
         CertificateRequest(server=server, client_id=client_id).perform()
-    except CertificateRequestException:
+    except CertificateRequestException as exc:
+        logging.error("%s", exc)
         sys.exit(1)
 
 
