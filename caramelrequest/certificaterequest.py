@@ -254,10 +254,13 @@ class CertificateRequest(object):
     def get_ssl_verify_argument(self):
         if self.is_selfsigned_server():
             return self.ca_cert_file_name
-        elif self.is_public_ssl_server():
-            return True
+        try:
+            self.verify_public_ssl_server()
+        except requests.exceptions.SSLError as exc:
+            logging.error('Problem connecting to CA server: %s', exc)
+            raise CertificateRequestException() from exc
         else:
-            raise CertificateRequestException()
+            return True
 
     def is_selfsigned_server(self):
         url = 'https://{}/'.format(self.server)
@@ -269,15 +272,11 @@ class CertificateRequest(object):
             return False
         return True
 
-    def is_public_ssl_server(self):
+    def verify_public_ssl_server(self):
         url = 'https://{}/'.format(self.server)
         session = requests.Session()
         session.verify = True
-        try:
-            session.get(url)
-        except requests.exceptions.SSLError:
-            return False
-        return True
+        session.get(url)
 
     def get_csr_and_hash(self):
         with open(self.csr_file_name, 'rb') as f:
